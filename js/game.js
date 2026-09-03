@@ -27,6 +27,27 @@ function launchBall() {
   ball.vy = -220;
 }
 
+// --- Transiciones de pantalla (clic / teclas) ---
+function handleTransitions() {
+  if ( input.pauseQueued ) {
+    input.pauseQueued = false;
+    if ( state.screen === 'playing' ) state.screen = 'paused';
+    else if ( state.screen === 'paused' ) state.screen = 'playing';
+  }
+
+  if ( input.launchQueued ) {
+    input.launchQueued = false;
+    if ( state.screen === 'start' ) {
+      state.screen = 'playing';
+      launchBall();
+    } else if ( state.screen === 'playing' && state.ballStuck ) {
+      launchBall();
+    } else if ( state.screen === 'gameover' || state.screen === 'win' ) {
+      resetGame();
+    }
+  }
+}
+
 // --- Actualización del estado 'playing' ---
 function update( dt ) {
   movePaddle( dt );
@@ -37,6 +58,11 @@ function update( dt ) {
   }
 
   moveBall( dt );
+
+  // Victoria: no quedan bloques vivos
+  if ( blocks.every( b => !b.alive ) ) {
+    state.screen = 'win';
+  }
 }
 
 function movePaddle( dt ) {
@@ -69,6 +95,24 @@ function moveBall( dt ) {
 
   handlePaddleCollision();
   handleBlockCollisions();
+
+  // Borde inferior: bola perdida
+  if ( ball.y - ball.r > HEIGHT ) {
+    loseLife();
+  }
+}
+
+function loseLife() {
+  state.lives--;
+  if ( state.lives <= 0 ) {
+    state.lives = 0;
+    state.screen = 'gameover';
+    return;
+  }
+  state.ballStuck = true;
+  ball.vx = 220;
+  ball.vy = -220;
+  stickBallToPaddle();
 }
 
 const MAX_BOUNCE_ANGLE = Math.PI / 3; // 60º respecto a la vertical
@@ -115,10 +159,57 @@ function handleBlockCollisions() {
   }
 }
 
-// --- Render del estado 'playing' ---
+// --- Render ---
 function render( ctx ) {
   ctx.clearRect( 0, 0, WIDTH, HEIGHT );
+
+  // Escena de juego (también de fondo bajo los overlays)
   drawBlocks( ctx, blocks );
   drawPaddle( ctx );
   drawBall( ctx );
+
+  if ( state.screen === 'playing' || state.screen === 'paused' ) {
+    drawHUD( ctx );
+  }
+
+  switch ( state.screen ) {
+    case 'start':
+      drawOverlay( ctx, 'ARKANOID', 'Pulsa para jugar' );
+      break;
+    case 'paused':
+      drawOverlay( ctx, 'PAUSA', 'Pulsa Esc para reanudar' );
+      break;
+    case 'gameover':
+      drawOverlay( ctx, 'GAME OVER', 'Puntuacion: ' + state.score + '  ·  Pulsa para reiniciar' );
+      break;
+    case 'win':
+      drawOverlay( ctx, 'VICTORIA', 'Puntuacion: ' + state.score + '  ·  Pulsa para reiniciar' );
+      break;
+  }
+}
+
+function drawHUD( ctx ) {
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText( 'PUNTOS: ' + state.score, 12, 10 );
+  ctx.textAlign = 'right';
+  ctx.fillText( 'VIDAS: ' + state.lives, WIDTH - 12, 10 );
+  ctx.restore();
+}
+
+function drawOverlay( ctx, title, subtitle ) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillRect( 0, 0, WIDTH, HEIGHT );
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '48px monospace';
+  ctx.fillText( title, WIDTH / 2, HEIGHT / 2 - 30 );
+  ctx.font = '20px monospace';
+  ctx.fillText( subtitle, WIDTH / 2, HEIGHT / 2 + 30 );
+  ctx.restore();
 }
